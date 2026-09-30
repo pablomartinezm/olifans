@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import Link from "next/link";
-import { Silkscreen } from "next/font/google";
+import { Pixelify_Sans, Silkscreen } from "next/font/google";
 import { Subscribe } from "@/components/client";
 import { Game } from "@/components/game";
 import { Icon, Verified } from "@/components/icons";
@@ -8,7 +8,9 @@ import { BottomBar, Nav } from "@/components/nav";
 import { getProfile } from "@/lib/posts";
 import { site } from "@/lib/site";
 
-const pixel = Silkscreen({ weight: "700", subsets: ["latin"] }); // fuente pixel de los textos del canvas
+// Fuentes pixel del juego: Silkscreen para títulos, botones y el canvas; Pixelify Sans para textos largos.
+const pixel = Silkscreen({ weight: ["400", "700"], subsets: ["latin"], variable: "--font-pixel" });
+const texto = Pixelify_Sans({ subsets: ["latin"], variable: "--font-texto" });
 
 export const dynamic = "force-dynamic";
 
@@ -26,7 +28,7 @@ export default async function Page() {
   return (
     <div className="app">
       <Nav active="" />
-      <main className="main">
+      <main className="main main-game">
         <header className="topbar">
           <Link href="/" aria-label="Volver al perfil"><Icon name="back" /></Link>
           <div>
@@ -34,7 +36,7 @@ export default async function Page() {
             <div className="handle">@{site.handle} · Juego exclusivo</div>
           </div>
         </header>
-        <Game font={pixel.style.fontFamily} avatar={profile.avatar} />
+        <Game font={pixel.style.fontFamily} className={`${pixel.variable} ${texto.variable}`} />
       </main>
       <aside className="aside">
         <div className="card">
