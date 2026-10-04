@@ -29,7 +29,7 @@ class G:
 
 # Cabeza de 16 de ancho (columnas 2-17), filas 1-17; orejas en 1 y 18.
 HEAD = [(6, 13), (4, 15), (3, 16), (2, 17), (2, 17), (2, 17), (2, 17), (2, 17), (2, 17), (2, 17), (2, 17), (2, 17), (3, 16), (3, 16), (4, 15), (5, 14), (7, 12)]
-def head(skin='s', h=32):
+def head(skin='s', h=42):
     g = G(20, h)
     g.spans(1, HEAD, skin)
     g.symrect(1, 9, 1, 11, 'd')          # orejas
@@ -57,19 +57,25 @@ def grin(g, y=12, wide=0, open_=False):
     g.rect(7 - wide, y + 1, 12 + wide, y + 1, 'm' if open_ else 't')
     if open_: g.rect(8, y + 2, 11, y + 2, 'n'); g.rect(7, y + 2, 7, y + 2, 'm'); g.rect(12, y + 2, 12, y + 2, 'm')
     else: g.rect(7 - wide, y + 2, 12 + wide, y + 2, 'd')
-def body(g, y=20, arms='s', kick=False):
-    g.spans(y, [(3, 16), (2, 17), (2, 17), (2, 17), (2, 17), (2, 17), (3, 16)], 'c')
-    g.symrect(2, y + 1, 3, y + 5, 'C'); g.symrect(4, y + 1, 4, y + 5, 'C')
-    g.symrect(2, y + 5, 3, y + 6, arms)  # manos
+# Tallas: las cabezas son iguales para todos; cambia el largo del tronco (t) y de las piernas (l).
+# Referencia, de 1,75 a 1,80 m: medio. Sanlle, Arro, Hugo y Javi rondan los 2 m; Moreno no llega a 1,70.
+TALLA = {"alto": (2, 4), "medio": (1, 1), "bajo": (0, 0)}
+def body(g, y=20, arms='s', kick=False, t=0, l=0, left=True):
+    g.spans(y, [(3, 16)] + [(2, 17)] * (5 + t) + [(3, 16)], 'c')
+    g.symrect(2, y + 1, 3, y + 5 + t, 'C'); g.symrect(4, y + 1, 4, y + 5 + t, 'C')
+    g.symrect(2, y + 5 + t, 3, y + 6 + t, arms)  # manos
+    if not left: g.rect(2, y + 1, 3, y + 6 + t, '.')  # sin el brazo izquierdo: lo levantan aparte
+    p = y + 7 + t
     if kick:  # pataleo al soplar: piernas abiertas
-        g.rect(5, y + 7, 14, y + 7, 'p')
-        g.rect(4, y + 8, 7, y + 8, 'p'); g.rect(12, y + 8, 15, y + 8, 'p')
-        g.rect(3, y + 9, 6, y + 9, 'P'); g.rect(13, y + 9, 16, y + 9, 'P')
-        g.rect(1, y + 10, 5, y + 10, 'f'); g.rect(14, y + 10, 18, y + 10, 'f')
+        g.rect(5, p, 14, p, 'p')
+        if l: g.rect(5, p + 1, 8, p + l, 'p'); g.rect(11, p + 1, 14, p + l, 'p')
+        g.rect(4, p + 1 + l, 7, p + 1 + l, 'p'); g.rect(12, p + 1 + l, 15, p + 1 + l, 'p')
+        g.rect(3, p + 2 + l, 6, p + 2 + l, 'P'); g.rect(13, p + 2 + l, 16, p + 2 + l, 'P')
+        g.rect(1, p + 3 + l, 5, p + 3 + l, 'f'); g.rect(14, p + 3 + l, 18, p + 3 + l, 'f')
         return
-    g.rect(5, y + 7, 9, y + 9, 'p'); g.rect(10, y + 7, 14, y + 9, 'p'); g.rect(9, y + 7, 10, y + 9, '.')
-    g.rect(5, y + 9, 8, y + 9, 'P'); g.rect(11, y + 9, 14, y + 9, 'P')
-    g.rect(4, y + 10, 8, y + 10, 'f'); g.rect(11, y + 10, 15, y + 10, 'f')
+    g.rect(5, p, 9, p + 2 + l, 'p'); g.rect(10, p, 14, p + 2 + l, 'p'); g.rect(9, p, 10, p + 2 + l, '.')
+    g.rect(5, p + 2 + l, 8, p + 2 + l, 'P'); g.rect(11, p + 2 + l, 14, p + 2 + l, 'P')
+    g.rect(4, p + 3 + l, 8, p + 3 + l, 'f'); g.rect(11, p + 3 + l, 15, p + 3 + l, 'f')
 def ko(g, skin='s'):
     # ojos en X (encima de lo que haya, gafas incluidas) y boca abierta
     for x in (5, 12):
@@ -97,7 +103,7 @@ def gon(kick=False, ko_=False):
     g.stamp(6, 12, ["mttttttm", " mmmmmm ", "  nnnn  "])
     g.stamp(6, 11, ["bbbbbbbb"])
     g.rect(7, 18, 12, 19, 's')
-    body(g, kick=kick); g.stamp(8, 20, ["k  k"]); g.stamp(8, 21, ["k  k"])
+    body(g, kick=kick, t=TALLA["medio"][0], l=TALLA["medio"][1]); g.stamp(8, 20, ["k  k"]); g.stamp(8, 21, ["k  k"])
     if ko_: ko(g)
     return S(g, h="#a0805a", H="#c4a276", b="#b38556", B="#6e5238", g="#1d1b20", v="#a9bfcf", c="#3a74b8", C="#2a5590", k="#e8e8e8")
 
@@ -113,7 +119,7 @@ def marcos(kick=False, ko_=False):
     g.symrect(15, 11, 17, 12, 'b')
     grin(g, 12)
     g.rect(7, 11, 12, 11, 'b')
-    body(g, kick=kick)
+    body(g, kick=kick, t=TALLA["medio"][0], l=TALLA["medio"][1])
     if ko_: ko(g)
     return S(g, h="#3b2619", H="#5a3a26", b="#7a5440", B="#2a1a12", c="#d4a03a", C="#a87a24")
 
@@ -129,11 +135,11 @@ def hugo(kick=False, ko_=False):
     nose(g)
     blush(g)
     grin(g, 12, wide=1)
-    body(g, kick=kick); g.stamp(4, 20, ["kk"]); g.stamp(5, 21, ["kk"]); g.stamp(6, 22, ["kk"]); g.stamp(7, 23, ["kk"]); g.stamp(8, 24, ["kk"]); g.stamp(9, 25, ["kk"])
+    body(g, kick=kick, t=TALLA["alto"][0], l=TALLA["alto"][1]); g.stamp(4, 20, ["kk"]); g.stamp(5, 21, ["kk"]); g.stamp(6, 22, ["kk"]); g.stamp(7, 23, ["kk"]); g.stamp(8, 24, ["kk"]); g.stamp(9, 25, ["kk"])
     if ko_: ko(g)
     return S(g, h="#1f1612", H="#3a2a20", y="#e8b84a", z="#3a2a10", Z="#8a6a2a", B="#1f1612", c="#f2efe8", C="#d2cdc0", k="#18181c")
 
-def arro(kick=False, ko_=False):
+def arro(kick=False, ko_=False, left=True):
     g = head()
     g.spans(1, [(6, 13), (4, 15), (3, 16), (2, 17), (2, 17)], 'h')
     g.symrect(2, 6, 2, 9, 'h'); g.put(3, 5, 'h'); g.put(16, 5, 'h')
@@ -146,7 +152,7 @@ def arro(kick=False, ko_=False):
     g.rect(5, 10, 14, 10, 's')
     grin(g, 12)
     g.rect(7, 11, 12, 11, 'B')
-    body(g, kick=kick)
+    body(g, kick=kick, t=TALLA["alto"][0], l=TALLA["alto"][1], left=left)
     if ko_: ko(g)
     g.rect(13, 13, 17, 13, 'W'); g.put(18, 13, 'O'); g.put(17, 13, 'A')         # el cigarro: siempre en la boca
     return S(g, h="#2e2018", H="#4a3426", z="#141418", Z="#4a4a58", b="#3a2a20", B="#24180f", c="#b8bcc6", C="#8e93a0", W="#f4f1ea", O="#ff7a2a", A="#9a9a9a")
@@ -170,7 +176,7 @@ def ricky(kick=False, ko_=False):
     if ko_: ko(g, 's')
     return S(g, s="#f2b8a0", d="#dc9a84", l="#ffe6d8", b="#8a5a3a", B="#7a5236", k="#cfd3db", K="#9aa0aa", c="#f2efe8")
 
-def javi(kick=False, ko_=False):
+def javi(kick=False, ko_=False, left=True):
     g = head()
     g.spans(1, [(6, 13), (4, 15), (3, 16), (2, 17)], 'h')                    # corto, tupé hacia un lado
     g.stamp(5, 1, ["HHHHH"]); g.stamp(4, 2, ["HHH"]); g.symrect(2, 5, 2, 7, 'h'); g.put(3, 5, 'h'); g.put(16, 5, 'h')
@@ -180,7 +186,7 @@ def javi(kick=False, ko_=False):
     g.spans(12, [(2, 3), (3, 4), (4, 15), (5, 14), (7, 12)], 'b')
     g.symrect(15, 12, 16, 13, 'b')
     grin(g, 12, wide=1)
-    body(g, kick=kick)
+    body(g, kick=kick, t=TALLA["alto"][0], l=TALLA["alto"][1], left=left)
     if ko_: ko(g)
     return S(g, h="#9a6e44", H="#c08d5a", B="#6e4a2c", i="#5f93c0", b="#d0a888", c="#24262c", C="#141518")
 
@@ -197,7 +203,7 @@ def moreno(kick=False, ko_=False):
     grin(g, 12, wide=1)
     g.stamp(8, 15, ["GG"]); g.stamp(11, 16, ["G"])
     g.rect(7, 18, 12, 18, 'q'); g.put(9, 19, 'Q')
-    body(g, kick=kick)
+    body(g, kick=kick, t=TALLA["bajo"][0], l=TALLA["bajo"][1])
     if ko_: ko(g)
     return S(g, h="#1c130e", H="#3a281c", B="#120c08", b="#2a1c14", G="#8a8078", q="#c0302a", Q="#e0e0e0", c="#f2efe8", C="#d2cdc0")
 
@@ -219,30 +225,30 @@ def sanlle():
     g.rect(9, 11, 10, 11, 'w')
     return S(g, h="#16100c", H="#3a2c22", f="#5a4636", s="#d89a70", d="#b87b54", l="#e8b48c", b="#5a4030", B="#1a120d")
 
-def uli_body(g, y=20, kick=False):
-    g.spans(y, [(3, 16), (2, 17), (2, 17), (2, 17), (2, 17), (2, 17), (3, 16)], 'c')
+def uli_body(g, y=20, kick=False):  # talla media: camisa, bermudas, piernas, calcetines y zapatillas
+    g.spans(y, [(3, 16), (2, 17), (2, 17), (2, 17), (2, 17), (3, 16)], 'c')
     g.rect(6, y, 13, y, 'b')                                       # la barba cae sobre el cuello
-    g.rect(9, y + 1, 10, y + 6, 'C')                               # botonadura
+    g.rect(9, y + 1, 10, y + 5, 'C')                               # botonadura
     g.symrect(2, y + 1, 3, y + 2, 'C')                             # manga corta
-    g.symrect(2, y + 3, 3, y + 5, 's'); g.symrect(3, y + 5, 3, y + 5, 'd')
-    for x, dy, c in ((5, 1, 'k'), (6, 2, 'K'), (13, 1, 'f'), (14, 3, 'k'), (15, 4, 'K'), (6, 5, 'f'), (12, 4, 'k'), (12, 5, 'K'), (7, 3, 'f')):
+    g.symrect(2, y + 3, 3, y + 4, 's'); g.symrect(3, y + 4, 3, y + 4, 'd')
+    for x, dy, c in ((5, 1, 'k'), (6, 2, 'K'), (13, 1, 'f'), (14, 3, 'k'), (15, 4, 'K'), (6, 4, 'f'), (12, 3, 'k'), (12, 4, 'K'), (7, 3, 'f')):
         g.put(x, y + dy, c)
-    g.rect(4, y + 7, 15, y + 9, 'q'); g.rect(4, y + 9, 15, y + 9, 'Q'); g.rect(9, y + 8, 10, y + 9, '.')  # bermudas
+    g.rect(4, y + 6, 15, y + 8, 'q'); g.rect(4, y + 8, 15, y + 8, 'Q'); g.rect(9, y + 7, 10, y + 8, '.')  # bermudas
     if kick:  # pataleo al soplar
         for i, (lx, rx) in enumerate(((5, 12), (4, 13), (3, 14))):
             c = 'w' if i == 2 else 's'
-            g.rect(lx, y + 10 + i, lx + 2, y + 10 + i, c); g.rect(rx, y + 10 + i, rx + 2, y + 10 + i, c)
-        g.rect(1, y + 13, 4, y + 13, 'z'); g.rect(15, y + 13, 18, y + 13, 'z')
+            g.rect(lx, y + 9 + i, lx + 2, y + 9 + i, c); g.rect(rx, y + 9 + i, rx + 2, y + 9 + i, c)
+        g.rect(1, y + 12, 4, y + 12, 'z'); g.rect(15, y + 12, 18, y + 12, 'z')
     else:     # piernas colgando
-        g.rect(5, y + 10, 7, y + 12, 's'); g.rect(12, y + 10, 14, y + 12, 's')
-        g.rect(7, y + 10, 7, y + 12, 'd'); g.rect(14, y + 10, 14, y + 12, 'd')
-        g.rect(5, y + 13, 7, y + 13, 'w'); g.rect(12, y + 13, 14, y + 13, 'w')
-        g.rect(4, y + 14, 7, y + 14, 'z'); g.rect(12, y + 14, 15, y + 14, 'z')
+        g.rect(5, y + 9, 7, y + 10, 's'); g.rect(12, y + 9, 14, y + 10, 's')
+        g.rect(7, y + 9, 7, y + 10, 'd'); g.rect(14, y + 9, 14, y + 10, 'd')
+        g.rect(5, y + 11, 7, y + 11, 'w'); g.rect(12, y + 11, 14, y + 11, 'w')
+        g.rect(4, y + 12, 7, y + 12, 'z'); g.rect(12, y + 12, 15, y + 12, 'z')
 
 ULI_PAL = dict(h="#33211a", H="#4a3024", b="#40281e", B="#2a1a14", g="#2f2f36", v="#dcf0ff", c="#cbe8c0", C="#a0ce9e", k="#43ab8e", K="#1f7a68", f="#f3a84f", q="#c9a86a", Q="#a8884f", z="#e4574a")
 
 def uli(kick=False):
-    g = head(h=37)
+    g = head()
     g.spans(1, [(6, 13), (4, 15), (3, 16), (2, 17), (2, 17)], 'h')
     g.stamp(6, 2, ["HHH  H"]); g.symrect(2, 6, 2, 9, 'h')
     # gafas grandes de pasta
@@ -258,7 +264,7 @@ def uli(kick=False):
     return S(g, **ULI_PAL)
 
 def uli_ko():
-    g = head(h=37)
+    g = head()
     g.spans(1, [(6, 13), (4, 15), (3, 16), (2, 17), (2, 17)], 'h')
     g.stamp(6, 2, ["HHH  H"]); g.symrect(2, 6, 2, 9, 'h')
     for x in (5, 12): g.stamp(x, 7, ["e e", " e ", "e e"])                      # ojos en X, sin gafas
@@ -270,7 +276,8 @@ def uli_ko():
     return S(g, **ULI_PAL)
 
 def gorila(air=False, ko_=False):
-    g = G(30, 38)
+    T, L = 3, 1  # Sanlle ronda los 2 m: tronco y piernas más largos
+    g = G(30, 44)
     head_ = sanlle()
     for y, r in enumerate(head_["rows"][:19]):
         for x, c in enumerate(r):
@@ -281,24 +288,25 @@ def gorila(air=False, ko_=False):
         g.stamp(13, 12, ["mmmm", "mnnm", "mmmm"])
     y0 = 17
     g.spans(y0, [(9, 20), (6, 23), (4, 25), (3, 26)], 'G')                         # hombros y cuello de gorila
-    g.spans(y0 + 4, [(6, 23)] * 6 + [(7, 22)] * 3, 'G')                              # tronco
+    g.spans(y0 + 4, [(6, 23)] * (6 + T) + [(7, 22)] * 3, 'G')                        # tronco
     g.spans(y0 + 3, [(10, 19), (9, 20), (9, 20), (9, 20), (10, 19), (11, 18)], 'k')  # pecho
     g.rect(11, y0 + 5, 13, y0 + 5, 'K'); g.rect(16, y0 + 5, 18, y0 + 5, 'K')        # pectorales
-    g.spans(y0 + 9, [(12, 17), (13, 16)], 'k')                                       # barriga
+    g.spans(y0 + 9 + T, [(12, 17), (13, 16)], 'k')                                   # barriga
     g.rect(5, y0 + 2, 8, y0 + 3, 'H'); g.rect(21, y0 + 2, 24, y0 + 3, 'H')          # luz en los hombros
+    f = y0 + 13 + T  # arriba de las piernas
     if air:  # brazos arriba, puños cerrados junto a la cabeza
         g.rect(1, 6, 5, y0 + 4, 'G'); g.rect(24, 6, 28, y0 + 4, 'G')
         g.rect(2, 8, 2, y0 + 2, 'H'); g.rect(27, 8, 27, y0 + 2, 'H')
         g.rect(1, 3, 5, 6, 'j'); g.rect(24, 3, 28, 6, 'j')
-        g.rect(9, y0 + 13, 12, y0 + 16, 'G'); g.rect(17, y0 + 13, 20, y0 + 16, 'G')      # piernas colgando
-        g.rect(8, y0 + 17, 12, y0 + 18, 'j'); g.rect(17, y0 + 17, 21, y0 + 18, 'j')
+        g.rect(9, f, 12, f + 3 + L, 'G'); g.rect(17, f, 20, f + 3 + L, 'G')          # piernas colgando
+        g.rect(8, f + 4 + L, 12, f + 5 + L, 'j'); g.rect(17, f + 4 + L, 21, f + 5 + L, 'j')
     else:    # en el suelo: brazos largos con los nudillos abajo y piernas arqueadas
-        g.rect(0, y0 + 4, 5, y0 + 15, 'G'); g.rect(24, y0 + 4, 29, y0 + 15, 'G')
-        g.rect(1, y0 + 5, 1, y0 + 13, 'H'); g.rect(28, y0 + 5, 28, y0 + 13, 'H')
-        g.rect(0, y0 + 16, 5, y0 + 18, 'j'); g.rect(24, y0 + 16, 29, y0 + 18, 'j')
-        g.rect(6, y0 + 6, 6, y0 + 18, '.'); g.rect(23, y0 + 6, 23, y0 + 18, '.')     # el contorno separa brazos y tronco
-        g.rect(8, y0 + 13, 11, y0 + 16, 'G'); g.rect(18, y0 + 13, 21, y0 + 16, 'G')
-        g.rect(7, y0 + 17, 12, y0 + 18, 'j'); g.rect(17, y0 + 17, 22, y0 + 18, 'j')
+        g.rect(0, y0 + 4, 5, y0 + 15 + T, 'G'); g.rect(24, y0 + 4, 29, y0 + 15 + T, 'G')
+        g.rect(1, y0 + 5, 1, y0 + 13 + T, 'H'); g.rect(28, y0 + 5, 28, y0 + 13 + T, 'H')
+        g.rect(0, y0 + 16 + T, 5, y0 + 18 + T, 'j'); g.rect(24, y0 + 16 + T, 29, y0 + 18 + T, 'j')
+        g.rect(6, y0 + 6, 6, f + 5 + L, '.'); g.rect(23, y0 + 6, 23, f + 5 + L, '.')  # el contorno separa brazos y tronco
+        g.rect(8, f, 11, f + 3 + L, 'G'); g.rect(18, f, 21, f + 3 + L, 'G')
+        g.rect(7, f + 4 + L, 12, f + 5 + L, 'j'); g.rect(17, f + 4 + L, 22, f + 5 + L, 'j')
     pal = {**head_["pal"], "G": "#565664", "H": "#8a8a9c", "k": "#a8989e", "K": "#86767e", "j": "#2c2830"}
     return S(g, **pal)
 
@@ -417,6 +425,7 @@ for pj in PJS:
     else:
         f = MAKERS[pj]
         SPRITES.update({pj: f(), pj + "_kick": f(kick=True), pj + "_ko": f(ko_=True)})
+SPRITES.update(javi_sinbrazo=javi(left=False), arro_sinbrazo=arro(left=False))
 SPRITES.update(jarra=jarra(), vacia=jarra(full=False), grifo=grifo(), rollo=rollo(), tapa=tapa(), billete=billete(), arpa=arpa(), novia=novia(), gafas=gafas(), nota=nota(), brazo=brazo(), puno=puno())
 ORDER = list(SPRITES)
 

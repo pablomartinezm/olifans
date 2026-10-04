@@ -3,8 +3,9 @@
 // si no, se la beben y devuelven la jarra vacía, que hay que recoger. Jarra rota, caña al suelo o colega que llega al
 // grifo: una vida menos. Toca una barra para ir a ella; toca la barra en la que estás para servir.
 import { createAudio } from "./audio.ts";
-import { PJS, SPR, paint, paintWall, type Pj, type SprName } from "./chicle-art.ts";
+import { PJS, SPR, paint, type Pj, type SprName } from "./chicle-art.ts";
 import { cyrillic, garble } from "./chicle.ts";
+import { layer } from "./uli-art.ts";
 
 export type TapRun = { score: number; served: number; tips: number; wave: number };
 
@@ -13,9 +14,13 @@ export type TapRun = { score: number; served: number; tips: number; wave: number
 export function tapReward(r: TapRun, nuevo: boolean) {
   return Math.floor(r.score / 25) + r.tips * 5 + (nuevo ? 25 : 0);
 }
-// Cada ronda trae más clientes, más seguidos y con más prisa. ponytail: curva a ojo.
+// Cada ronda, un poco más de todo en línea recta y con tope: clientes, llegadas por segundo, parejas y prisa.
+// Medida con tools/tapper-sim.mjs: un jugador normal pierde vida en el 10-20 % de las primeras rondas, la cosa
+// se pone seria hacia la 7 y cierra hacia la 9; uno torpe, hacia la 7; uno bueno, hacia la 14.
 export function ronda(n: number) {
-  return { clientes: 3 + n * 2, cada: Math.max(0.8, 2.6 - n * 0.22), prisa: Math.min(2, 1 + (n - 1) * 0.12) };
+  const pares = Math.min(0.5, 0.07 * (n - 1));
+  const ritmo = Math.min(2.2, 0.55 + 0.12 * (n - 1)); // clientes por segundo
+  return { clientes: 4 + n, cada: (1 + pares) / ritmo, pares, prisa: Math.min(1.8, 1 + 0.07 * (n - 1)) };
 }
 // Barra tocada según la altura del toque dentro del campo de juego.
 export function barAt(y: number, top: number, rowH: number, bars = 4) {
@@ -23,13 +28,15 @@ export function barAt(y: number, top: number, rowH: number, bars = 4) {
 }
 
 // ---------------------------------------------------------------- reglas
-const MIN_W = 144, MAX_W = 176, MIN_H = 230, MAX_H = 340;
-const HUD = 30, BARS = 4, TOP = 8;
+// Más ancho que Flappy: con muñecos de 20 píxeles, las barras tienen que ser largas para que dé tiempo a servir.
+const MIN_W = 210, MAX_W = 260, MIN_H = 300, MAX_H = 460;
+const HUD = 34, BARS = 4, TOP = 8;
 const DOOR = 12;                         // la puerta de cada barra, a la izquierda
-const WALK = 13;                         // px/s de un cliente normal en la primera ronda
-const V = { full: 85, empty: 50, push: 75 };
-const PUSH = 36;                         // lo que retrocede un cliente al pillar la caña: lejos de la puerta, hacen falta dos
+const WALK = 15;                         // px/s de un cliente normal en la primera ronda
+const V = { full: 100, empty: 55, push: 85 };
+const PUSH = 50;                         // lo que retrocede un cliente al pillar la caña: lejos de la puerta, hacen falta varias
 const DRINK = 1.1, LIVES = 3;
+const HARTO = 3; // a la tercera caña se van al baño, estén donde estén: si no, los que apenas retroceden no se iban nunca
 // La manía de cada uno: prisa (velocidad) y empuje (cuánto retrocede con cada caña).
 const MANIAS: Record<Pj, { prisa: number; empuje: number }> = {
   uli: { prisa: 0.9, empuje: 0.5 },     // el novio: le cuesta irse
@@ -43,7 +50,7 @@ const MANIAS: Record<Pj, { prisa: number; empuje: number }> = {
   ricky: { prisa: 1, empuje: 1.2 },     // no se le ve detrás de la barra
 };
 const GON = {
-  ronda: ["¡Ronda {r}!", "¡Ronda {r}, que no pare!", "¡Ronda {r}! ¡Viva el novio!"],
+  ronda: ["¡Ronda {r}!", "¡Ronda {r}, que no pare!", "¡Ronda {r}! ¡Asquerosa!"],
   vida: ["¡Se ha roto una jarra!", "¡{n}, espabila!", "¡Ojo con la barra!"],
   pide: ["¡Una caña!", "¡Otra!", "¡Vodka no, caña!", "¡Ponme una!"],
   fin: ["¡Cerramos!", "¡{n}, a la calle!", "¡Mañana más!"],
@@ -53,7 +60,7 @@ const BLA = ["BLA BLA BLA", "HE DEJADO DE FUMAR", "Y ESCUCHA...", "PUES NADA", "
 type Opts = { font: string; textFont: string; onOver: (r: TapRun) => void };
 type Cust = {
   id: Pj; bar: number; x: number; st: "walk" | "push" | "drink" | "out";
-  t: number; to: number; tug: number; jerk: number; say: string | null; sayT: number; n: number;
+  t: number; to: number; tug: number; jerk: number; say: string | null; sayT: number; n: number; bebidas: number;
 };
 type Mug = { bar: number; x: number; full: boolean };
 type Bit = { x: number; y: number; vx: number; vy: number; t: number; life: number; c: string };
@@ -73,8 +80,127 @@ export function mountTapper({ canvas: cv, stage }: { canvas: HTMLCanvasElement; 
   const NAME = Object.fromEntries(PJS.map((p) => [p.id, p.name])) as Record<Pj, string>;
   // De pie detrás de la barra: el gorila en su postura de suelo.
   const standing = (id: Pj) => (id === "sanlle" ? IMG.sanlle_kick : IMG[id]);
-  let wall = paintWall(PH);
+  // Todos con los pies a la misma altura, escondidos tras la barra: según lo alto que sea cada uno, asoma más o menos.
+  // Ricky, que es bajito, apenas saca la calva.
+  const topOf = (id: Pj, cy: number) => (id === "ricky" ? cy - 8 : cy + 9 - standing(id).height);
   let best = 0;
+
+  // ---------------------------------------------------------------- fondo: el bar de la despedida, barra a barra
+  // Cada barra tiene su viga, su pared de azulejos, su lámpara y su decoración, siempre por encima de las cabezas.
+  const ULI_FOTO = paint({ rows: SPR.uli.rows.slice(0, 20), pal: SPR.uli.pal });
+  const zone = (i: number) => { // hueco libre entre la viga y las cabezas de la barra i
+    const r = TOP + i * rowH, top = r + 11;
+    return { r, top, h: Math.max(0, counterY(i) - 30 - top) };
+  };
+  const bottle = (P: (x: number, y: number, w: number, h: number, c: string) => void, x: number, base: number, bh: number, col: string, hi: string) => {
+    const top = base - bh;
+    P(x + 2, top, 2, 2, "#1a1a1a"); P(x + 2, top + 2, 2, 4, col); P(x + 1, top + 6, 4, 1, col);
+    P(x, top + 7, 6, bh - 7, col); P(x + 1, top + 8, 1, Math.max(1, bh - 10), hi); P(x, top + 10, 6, 2, "rgba(246,234,210,0.55)");
+  };
+  const BOTTLES = [["#2f6b3a", "#4f9a5c"], ["#7a2430", "#a8404c"], ["#c98a2b", "#e8b457"], ["#3d5f7a", "#6187a6"], ["#cfc8b5", "#f1ecdf"], ["#8f6a2a", "#b88f47"]] as const;
+  function paintBg() {
+    const c = layer(() => {}, VW, PH);
+    const g = c.getContext("2d")!;
+    const P = (x: number, y: number, w: number, h: number, col: string) => { g.fillStyle = col; g.fillRect(x, y, w, h); };
+    const mid = Math.round(VW / 2), L = 20, R = VW - 42; // la lámpara va en medio; la decoración, a los lados
+    for (let i = 0; i < BARS; i++) {
+      const { r, top, h } = zone(i);
+      const bottom = i === BARS - 1 ? PH : r + rowH;
+      for (let y = r, j = 0; y < bottom; y += 10, j++) for (let x = 0, k = 0; x < VW; x += 10, k++) {
+        const alt = (j + k) % 2 === 0;
+        P(x, y, 10, 10, alt ? "#1d3b33" : "#19342d"); P(x, y, 10, 1, "#12271f"); P(x, y, 1, 10, "#12271f");
+        P(x + 2, y + 2, 3, 1, alt ? "#27493f" : "#214238");
+      }
+      // lámpara colgando de la viga, con su luz cálida
+      const glow = g.createRadialGradient(mid, r + 9, 1, mid, r + 9, rowH * 0.75);
+      glow.addColorStop(0, "rgba(255,214,140,0.26)");
+      glow.addColorStop(1, "rgba(255,214,140,0)");
+      g.fillStyle = glow;
+      g.fillRect(0, r, VW, rowH);
+      P(0, r, VW, 3, "#2c1a11"); P(0, r + 2, VW, 1, "#6e4428"); // viga: el suelo de la barra de arriba
+      P(mid, r + 3, 1, 3, "#0c0c0c"); P(mid - 4, r + 6, 9, 2, "#b67a2c"); P(mid - 5, r + 8, 11, 1, "#f2b35e"); P(mid - 3, r + 9, 7, 1, "#fff3c4");
+      if (h < 14) continue; // pantalla muy baja: sin decoración
+      const dh = Math.min(h, 30);
+      if (i === 0) { // banderines de fiesta de punta a punta (el cartel de «¡asquerosa!» se pinta encima, con letra)
+        for (let x = 0; x < VW; x++) P(x, Math.round(r + 5 + 4 * Math.sin((Math.PI * x) / VW)), 1, 1, "#e9e4d8");
+        ["#ff6fb4", "#00aff0", "#f2b35e", "#f6ead2"].forEach((col, n) => {
+          for (let x = 4 + n * 9; x < VW - 4; x += 36) {
+            const y = Math.round(r + 6 + 4 * Math.sin((Math.PI * x) / VW));
+            for (let k = 0; k < 4; k++) P(x + k, y + k, 7 - 2 * k, 1, col); // banderín: triángulo hacia abajo
+          }
+        });
+      } else if (i === 1) { // espejo con marco dorado y estante de botellas
+        const mw = Math.min(54, mid - 12 - L);
+        P(L, top, mw, dh, "#a8761f"); P(L + 2, top + 2, mw - 4, dh - 4, "#8fb4c0");
+        for (let k = 0; k < 3; k++) P(L + 6 + k * 9, top + 3, 2, dh - 6, "rgba(255,255,255,0.35)");
+        const sy = top + dh - 2;
+        P(mid + 10, sy, R - mid - 10, 3, "#6b4228"); P(mid + 10, sy, R - mid - 10, 1, "#8a5a36");
+        for (let x = mid + 13, n = 0; x < R - 6; x += 9, n++) {
+          const [col, hi] = BOTTLES[n % BOTTLES.length];
+          bottle(P, x, sy, Math.min(dh - 2, 13 + ((n * 5) % 7)), col, hi);
+        }
+      } else if (i === 2) { // letrero de neón (la letra se pinta encima, brillando) y la foto del novio
+        P(L, top + 2, Math.min(70, mid - 12 - L), Math.min(dh, 18), "#141018");
+        const fx = R - 30, fy = top;
+        P(fx, fy, 26, 26, "#a8761f"); P(fx + 1, fy + 1, 24, 24, "#e0b040"); P(fx + 3, fy + 3, 20, 20, "#2a3a44");
+        g.drawImage(ULI_FOTO, fx + 3, fy + 3);
+        for (const [hx, hy] of [[fx - 9, fy + 4], [fx - 7, fy + 15]]) { P(hx, hy, 2, 2, "#ff6fb4"); P(hx + 3, hy, 2, 2, "#ff6fb4"); P(hx, hy + 1, 5, 2, "#ff6fb4"); P(hx + 1, hy + 3, 3, 1, "#ff6fb4"); P(hx + 2, hy + 4, 1, 1, "#ff6fb4"); }
+      } else { // pizarra de la barra libre, el Pilar y una diana
+        P(L, top, 56, dh, "#6b4228"); P(L + 3, top + 3, 50, dh - 6, "#24332c");
+        const fx = mid + 12, fw = Math.min(44, R - 30 - fx), fh = dh;
+        if (fw > 24) {
+          P(fx, top, fw, fh, "#6b4228"); P(fx + 2, top + 2, fw - 4, fh - 4, "#f2b35e"); P(fx + 2, top + 2, fw - 4, Math.round(fh / 3), "#f7cf86");
+          P(fx + 2, top + fh - 6, fw - 4, 4, "#3d6f8a");
+          P(fx + 6, top + fh - 12, fw - 12, 6, "#c9a27a");
+          P(fx + 4, top + 5, 3, fh - 11, "#b08a62"); P(fx + fw - 7, top + 5, 3, fh - 11, "#b08a62");
+          for (let k = 0; k < 3; k++) P(fx + 10 + k * Math.round((fw - 22) / 2), top + fh - 15, 5, 3, "#3d8a6a");
+        }
+        const dx = R - 12, dy = top + Math.round(dh / 2), dr = Math.min(10, Math.round(dh / 2) - 1);
+        const disc = (rr: number, col: string) => {
+          for (let yy = -rr; yy <= rr; yy++) { const w = Math.round(Math.sqrt(rr * rr - yy * yy)); P(dx - w, dy + yy, w * 2 + 1, 1, col); }
+        };
+        ["#1a1a1a", "#e9e4d8", "#c0302a", "#e9e4d8", "#2f8a3a"].forEach((col, k) => { if (dr - 2 * k > 0) disc(dr - 2 * k, col); }); // diana: anillos
+        P(dx, dy, 1, 1, "#c0302a");
+        P(dx + 1, dy - 1, 6, 1, "#b8c0cc"); P(dx + 6, dy - 2, 2, 3, "#e4574a"); // un dardo clavado
+      }
+    }
+    return c;
+  }
+  let bg = paintBg();
+  // Las letras van aparte, a resolución de pantalla, para que se lean nítidas.
+  function drawDecor() {
+    const mid = Math.round(VW / 2), L = 20;
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    const z0 = zone(0), z2 = zone(2), z3 = zone(3);
+    if (z0.h >= 14) { // cartel de «¡asquerosa!»
+      ctx.font = `700 8px ${opts.font}`;
+      const text = "¡ASQUEROSA!", w = Math.ceil(ctx.measureText(text).width) + 12, y = z0.top + 2;
+      px(mid - w / 2 - 1, y - 1, w + 2, 15, "#5a1030"); px(mid - w / 2, y, w, 13, "#f6ead2");
+      px(mid - w / 2, y + 11, w, 2, "#e2d6bc");
+      ctx.fillStyle = "#c0302a";
+      ctx.fillText(text, mid, y + 6.5);
+    }
+    if (z2.h >= 14) { // neón de OLIFANS, con su parpadeo
+      const w = Math.min(70, mid - 12 - L), y = z2.top + 2 + Math.min(z2.h, 18) / 2;
+      const on = reduced || Math.sin(st.t * 23) > -0.95;
+      ctx.font = `700 9px ${opts.font}`;
+      ctx.save();
+      ctx.shadowColor = "#ff6fb4";
+      ctx.shadowBlur = on ? 5 * U : 0;
+      ctx.fillStyle = on ? "#ffd6ea" : "#8a4a68";
+      ctx.fillText("OLIFANS", L + w / 2, y + 0.5);
+      ctx.restore();
+    }
+    if (z3.h >= 14) { // la pizarra: barra libre
+      const dh = Math.min(z3.h, 30);
+      ctx.font = `400 7px ${opts.font}`;
+      ctx.fillStyle = "#e9e4d8";
+      ctx.fillText("BARRA", L + 28, z3.top + dh / 2 - 4);
+      ctx.fillStyle = "#f2b35e";
+      ctx.fillText("LIBRE", L + 28, z3.top + dh / 2 + 5);
+    }
+  }
 
   // ---------------------------------------------------------------- sonido
   const au = createAudio();
@@ -127,7 +253,7 @@ export function mountTapper({ canvas: cv, stage }: { canvas: HTMLCanvasElement; 
     const load = [0, 1, 2, 3].map((b) => st.custs.filter((c) => c.bar === b && c.st !== "out").length + Math.random());
     const bar = load.indexOf(Math.min(...load));
     const id = nextWho();
-    const c: Cust = { id, bar, x: DOOR + 2, st: "walk", t: Math.random(), to: 0, tug: 3 + Math.random() * 3, jerk: 0, say: null, sayT: 0, n: st.n++ };
+    const c: Cust = { id, bar, x: DOOR + 2, st: "walk", t: Math.random(), to: 0, tug: 3 + Math.random() * 3, jerk: 0, say: null, sayT: 0, n: st.n++, bebidas: 0 };
     if (id === "gon") { c.say = gonSays("pide"); c.sayT = 2.2; }
     st.custs.push(c);
   }
@@ -164,7 +290,11 @@ export function mountTapper({ canvas: cv, stage }: { canvas: HTMLCanvasElement; 
     sfx.move();
   }
   function act(bar: number | "up" | "down" | "serve") {
-    if (st.mode === "ready") { st.mode = "play"; say("ronda"); }
+    if (st.mode === "ready") { // el toque de empezar no sirve: aún no hay nadie y la caña se estrellaría
+      st.mode = "play";
+      say("ronda");
+      if (bar === "serve" || bar === st.bar) return;
+    }
     if (st.mode !== "play") return;
     if (bar === "serve") serve();
     else if (bar === "up") goTo(Math.max(0, st.bar - 1));
@@ -189,7 +319,7 @@ export function mountTapper({ canvas: cv, stage }: { canvas: HTMLCanvasElement; 
     // el humo de Arro sale siempre, haya partida o no
     for (const c of st.custs) {
       if (c.id !== "arro" || c.st === "out" || Math.random() > dt * 4) continue;
-      st.smoke.push({ x: c.x + 8, y: counterY(c.bar) - 12, vx: -3 + Math.random() * 6, vy: -12 - Math.random() * 8, t: 0, life: 1.3, c: "" });
+      st.smoke.push({ x: c.x + 8, y: topOf("arro", counterY(c.bar)) + 12, vx: -3 + Math.random() * 6, vy: -12 - Math.random() * 8, t: 0, life: 1.3, c: "" });
     }
     if (st.mode === "oops") {
       if ((st.wait -= dt) > 0) return;
@@ -204,6 +334,7 @@ export function mountTapper({ canvas: cv, stage }: { canvas: HTMLCanvasElement; 
       return;
     }
     if (st.mode === "clear") {
+      for (const c of st.custs) c.x -= 40 * dt; // el último sigue saliendo, aunque se fuera desde media barra
       if ((st.wait -= dt) > 0) return;
       st.wave++;
       st.left = ronda(st.wave).clientes;
@@ -219,7 +350,7 @@ export function mountTapper({ canvas: cv, stage }: { canvas: HTMLCanvasElement; 
     if (st.left > 0 && (st.next -= dt) <= 0) {
       spawn();
       st.left--;
-      if (st.left > 0 && Math.random() < Math.min(0.5, 0.15 * (st.wave - 1))) { spawn(); st.left--; } // a veces llegan de dos en dos
+      if (st.left > 0 && Math.random() < ronda(st.wave).pares) { spawn(); st.left--; } // a veces llegan de dos en dos
       st.next = ronda(st.wave).cada * (0.7 + Math.random() * 0.6);
     }
     // clientes
@@ -240,13 +371,14 @@ export function mountTapper({ canvas: cv, stage }: { canvas: HTMLCanvasElement; 
       } else if (c.st === "push") {
         c.x = Math.max(c.to, c.x - V.push * dt);
         if (c.x <= c.to) {
-          if (c.x < DOOR + 2) { // fuera: servido
+          if (c.x < DOOR + 2 || c.bebidas >= HARTO) { // fuera: servido
+            const bano = c.x >= DOOR + 2; // no ha llegado a la puerta: se va él, a la tercera
             c.st = "out";
             st.served++;
             st.score += 50;
-            pop("+50", Math.max(16, c.x + 12), counterY(c.bar) - 26, "#7cc59a");
+            pop(bano ? "¡AL BAÑO!" : "+50", Math.min(VW - 34, Math.max(bano ? 34 : 16, c.x + 12)), counterY(c.bar) - 26, "#7cc59a");
             sfx.served();
-            if (c.id === "marcos") for (let i = 0; i < 4; i++) st.notes.push({ x: 18, y: counterY(c.bar) - 20, vx: 4 + Math.random() * 10, vy: -20 - Math.random() * 12, t: -i * 0.15, life: 1.4, c: "" });
+            if (c.id === "marcos") for (let i = 0; i < 4; i++) st.notes.push({ x: Math.max(18, c.x), y: counterY(c.bar) - 20, vx: 4 + Math.random() * 10, vy: -20 - Math.random() * 12, t: -i * 0.15, life: 1.4, c: "" });
           } else { c.st = "drink"; c.t = 0; }
         }
       } else if (c.st === "drink") {
@@ -270,6 +402,7 @@ export function mountTapper({ canvas: cv, stage }: { canvas: HTMLCanvasElement; 
           m.x = -999;
           c.st = "push";
           c.to = c.x - PUSH * MANIAS[c.id].empuje;
+          c.bebidas++;
           sfx.catch();
           if (c.id === "hugo") { st.cash.push({ bar: c.bar, x: c.x + 10, full: false }); pop("¡PROPINA!", c.x, counterY(c.bar) - 34, "#9ad7a8"); }
           if (c.id === "arro") { c.say = BLA[Math.floor(Math.random() * BLA.length)]; c.sayT = 1.6; }
@@ -316,14 +449,14 @@ export function mountTapper({ canvas: cv, stage }: { canvas: HTMLCanvasElement; 
   }
   function bubble(x: number, y: number, lines: string[], font: string) {
     ctx.font = font;
-    const w = Math.ceil(Math.max(...lines.map((l) => ctx.measureText(l).width))) + 8, h = 4 + lines.length * 8;
+    const w = Math.ceil(Math.max(...lines.map((l) => ctx.measureText(l).width))) + 8, h = 4 + lines.length * 9;
     const bx = Math.round(Math.max(2, Math.min(VW - w - 2, x - w / 2))), by = Math.round(y - h);
     px(bx - 1, by, w + 2, h, "#06121a"); px(bx, by - 1, w, h + 2, "#06121a"); px(bx, by, w, h, "#f6ead2");
     px(Math.round(x) - 1, by + h, 3, 2, "#06121a"); px(Math.round(x), by + h, 1, 2, "#f6ead2");
     ctx.fillStyle = "#1d1b20";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    lines.forEach((l, i) => ctx.fillText(l, bx + w / 2, by + 6 + i * 8));
+    lines.forEach((l, i) => ctx.fillText(l, bx + w / 2, by + 6.5 + i * 9));
   }
   // Detrás de la barra solo se ve hasta el borde de abajo del mostrador: ni pies ni piernas por debajo.
   function behindBar(img: HTMLCanvasElement, x: number, y: number, cy: number) {
@@ -333,9 +466,8 @@ export function mountTapper({ canvas: cv, stage }: { canvas: HTMLCanvasElement; 
   function drawCust(c: Cust) {
     const cy = counterY(c.bar);
     const img = standing(c.id);
-    const lift = c.id === "ricky" ? 8 : c.id === "uli" || c.id === "sanlle" ? 26 : 24; // a Ricky casi no se le ve
     const yank = c.jerk > 0 ? Math.round(Math.sin(((0.4 - c.jerk) / 0.4) * Math.PI) * 8) : 0; // el tirón de Moreno
-    const x = Math.round(c.x - img.width / 2) - yank, y = cy - lift;
+    const x = Math.round(c.x - img.width / 2) - yank, y = topOf(c.id, cy);
     if (c.id === "moreno") { // la correa sale por la puerta: la novia tira desde fuera
       const ly = y + 18;
       px(0, ly, Math.max(0, x + 9), 1, "#c0302a");
@@ -362,7 +494,7 @@ export function mountTapper({ canvas: cv, stage }: { canvas: HTMLCanvasElement; 
     // camarero
     if (st.bar === bar) {
       const img = st.ko > 0 && st.mode !== "play" ? IMG[`${st.pj}_ko` as SprName] : standing(st.pj);
-      behindBar(img, Math.round(BARMAN() - img.width / 2), cy - 24 - (st.bob > 0 ? 1 : 0), cy);
+      behindBar(img, Math.round(BARMAN() - img.width / 2), topOf(st.pj, cy) - (st.bob > 0 ? 1 : 0), cy);
     }
     // barra
     px(DOOR - 1, cy, VW - DOOR + 1, 2, "#c99a5e");
@@ -378,13 +510,13 @@ export function mountTapper({ canvas: cv, stage }: { canvas: HTMLCanvasElement; 
   function drawHud() {
     px(0, 0, VW, HUD, "#06121a");
     px(0, HUD - 2, VW, 2, "#2e5549");
-    ctx.drawImage(GON_FACE, 3, 6);
-    const bx = 27, bw = VW - bx - 46;
+    ctx.drawImage(GON_FACE, 3, 7);
+    const bx = 27, bw = VW - bx - 52;
     ctx.textBaseline = "top";
     if (st.gon) {
-      px(bx - 3, 15, 3, 3, "#f6ead2"); px(bx - 4, 16, 1, 1, "#f6ead2");
+      px(bx - 3, 16, 3, 3, "#f6ead2"); px(bx - 4, 17, 1, 1, "#f6ead2");
       px(bx, 3, bw, HUD - 8, "#f6ead2");
-      ctx.font = `600 7px ${opts.textFont}`;
+      ctx.font = `600 8px ${opts.textFont}`;
       ctx.textAlign = "left";
       ctx.fillStyle = "#1d1b20";
       const lines: string[] = [];
@@ -393,20 +525,20 @@ export function mountTapper({ canvas: cv, stage }: { canvas: HTMLCanvasElement; 
         if (cur !== undefined && ctx.measureText(`${cur} ${w}`).width <= bw - 6) lines[lines.length - 1] = `${cur} ${w}`;
         else lines.push(w);
       }
-      lines.slice(0, 3).forEach((l, i) => ctx.fillText(l, bx + 3, 4 + i * 7));
+      lines.slice(0, 3).forEach((l, i) => ctx.fillText(l, bx + 3, 4 + i * 8));
     } else {
-      ctx.font = `400 7px ${opts.font}`;
+      ctx.font = `400 8px ${opts.font}`;
       ctx.textAlign = "left";
       ctx.fillStyle = "#6f8a80";
-      ctx.fillText(`RÉCORD ${best}`, bx, 7);
-      ctx.fillText(`RONDA ${st.wave}`, bx, 16);
+      ctx.fillText(`RÉCORD ${best}`, bx, 8);
+      ctx.fillText(`RONDA ${st.wave}`, bx, 19);
     }
     ctx.textAlign = "right";
-    ctx.font = `700 12px ${opts.font}`;
+    ctx.font = `700 14px ${opts.font}`;
     drawText(String(st.score), VW - 5, 3, "#f6ead2");
     for (let i = 0; i < LIVES; i++) {
       ctx.globalAlpha = i < st.lives ? 1 : 0.25;
-      ctx.drawImage(IMG.jarra, VW - 16 - i * 12, 16);
+      ctx.drawImage(IMG.jarra, VW - 16 - i * 13, 20);
     }
     ctx.globalAlpha = 1;
   }
@@ -421,27 +553,28 @@ export function mountTapper({ canvas: cv, stage }: { canvas: HTMLCanvasElement; 
     ctx.setTransform(U, 0, 0, U, sx * U, HUD * U);
     ctx.save();
     ctx.beginPath(); ctx.rect(-4, 0, VW + 8, PH + 4); ctx.clip();
-    ctx.drawImage(wall, 0, 0);
+    ctx.drawImage(bg, 0, 0);
     px(0, 0, VW, 6, "#2c1a11"); px(0, 6, VW, 1, "#6e4428");
+    drawDecor();
     for (let b = 0; b < BARS; b++) drawBar(b);
     for (const m of st.smoke) px(Math.round(m.x), Math.round(m.y), 2, 2, `rgba(220,220,220,${(0.7 * (1 - m.t / m.life)).toFixed(2)})`);
     for (const n of st.notes) if (n.t > 0) ctx.drawImage(IMG.nota, Math.round(n.x), Math.round(n.y));
     // bocadillos: lo que pide Gon (en cirílico) y la chapa de Arro
     for (const c of st.custs) {
       if (!c.say || c.sayT <= 0 || c.st === "out") continue;
-      const y = counterY(c.bar) - (c.id === "uli" ? 28 : 26);
-      if (c.id === "gon") bubble(c.x, y, [c.say], `600 7px ${opts.textFont}`);
+      const y = topOf(c.id, counterY(c.bar)) - 2;
+      if (c.id === "gon") bubble(c.x, y, [c.say], `600 8px ${opts.textFont}`);
       else {
         const cut = c.say.lastIndexOf(" ", Math.ceil(c.say.length / 2) + 1);
-        bubble(c.x, y, c.say.length > 12 && cut > 0 ? [c.say.slice(0, cut), c.say.slice(cut + 1)] : [c.say], `700 6px ${opts.font}`);
+        bubble(c.x, y, c.say.length > 12 && cut > 0 ? [c.say.slice(0, cut), c.say.slice(cut + 1)] : [c.say], `700 7px ${opts.font}`);
       }
     }
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
-    ctx.font = `700 8px ${opts.font}`;
+    ctx.font = `700 9px ${opts.font}`;
     for (const p of st.pops) drawText(p.text, p.x, p.y - p.age * 14, p.color, 1 - p.age);
     if (st.mode === "ready") {
-      ctx.font = `700 8px ${opts.font}`;
+      ctx.font = `700 9px ${opts.font}`;
       const a = reduced ? 1 : 0.55 + 0.45 * Math.sin(st.t * 6);
       drawText("TOCA LA BARRA DONDE ESTÁS", VW / 2, PH * 0.5 - 6, "#f6ead2", a);
       drawText("PARA SERVIR", VW / 2, PH * 0.5 + 6, "#f6ead2", a);
@@ -461,7 +594,7 @@ export function mountTapper({ canvas: cv, stage }: { canvas: HTMLCanvasElement; 
     cv.style.width = (unit * VW) / dpr + "px";
     cv.style.height = (unit * rows) / dpr + "px";
     U = unit;
-    if (rows !== H) { H = rows; PH = H - HUD; rowH = Math.floor((PH - TOP - 4) / BARS); wall = paintWall(PH); }
+    if (rows !== H || cv.width !== bg.width * unit) { H = rows; PH = H - HUD; rowH = Math.floor((PH - TOP - 4) / BARS); bg = paintBg(); }
   }
   const onPointer = (ev: PointerEvent) => {
     if (st.mode === "intro" || st.mode === "over") return;
@@ -480,7 +613,7 @@ export function mountTapper({ canvas: cv, stage }: { canvas: HTMLCanvasElement; 
   stage.addEventListener("pointerdown", onPointer);
   window.addEventListener("keydown", onKey);
   // ponytail: solo en desarrollo, para mirar y forzar estados desde la consola del navegador
-  if (process.env.NODE_ENV === "development") Object.assign(window, { __tapper: { st, act, counterY, TAP } });
+  if (process.env.NODE_ENV === "development") Object.assign(window, { __tapper: { st, act, counterY, TAP, speedOf } });
   const ro = new ResizeObserver(resize);
   ro.observe(stage);
   resize();
@@ -495,8 +628,8 @@ export function mountTapper({ canvas: cv, stage }: { canvas: HTMLCanvasElement; 
     raf = requestAnimationFrame(frame);
   }
   Promise.all([
-    document.fonts.load(`700 12px ${opts.font}`).catch(() => {}),
-    document.fonts.load(`600 7px ${opts.textFont}`, "Гон").catch(() => {}),
+    document.fonts.load(`700 14px ${opts.font}`).catch(() => {}),
+    document.fonts.load(`600 8px ${opts.textFont}`, "Гон").catch(() => {}),
   ]).then(() => { if (!dead) raf = requestAnimationFrame(frame); });
 
   return {

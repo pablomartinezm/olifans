@@ -87,8 +87,9 @@ const STEP = 80;                   // cuánto puede cambiar de altura el hueco d
 // ponytail: curva de dificultad a ojo, sin tabla configurable
 const speed = (score: number) => 60 + Math.min(score, 40) * 0.35;
 const gapH = (score: number) => Math.max(82, 102 - score * 0.5); // con piernas, Uli ocupa más
-const HIGH = { t: 6, k: 1.6 };      // la farlopa de Sanlle: todo más rápido y cada rollo vale doble
-const SLOW = { t: 4.5, k: 0.55 };   // el arpa de Marcos: cámara lenta
+// Sanlle y Marcos solo cambian lo rápido que pasa el bar; a Uli se le controla siempre igual.
+const HIGH = { t: 4, k: 1.3 };      // la farlopa de Sanlle: el bar va más rápido y cada rollo vale doble
+const SLOW = { t: 4, k: 0.6 };      // el arpa de Marcos: el bar va más despacio, un respiro
 const JAVI = { a0: (170 * Math.PI) / 180, a1: (248 * Math.PI) / 180, len: 33 }; // de brazo al frente a brazo en alto
 
 const GON: Record<Friend | "arriba" | "abajo" | "inicio" | "muerte", string[]> = {
@@ -101,7 +102,7 @@ const GON: Record<Friend | "arriba" | "abajo" | "inicio" | "muerte", string[]> =
   ricky: ["¡Rebota en la calva de Ricky!", "¡Ricky está abajo!"],
   arriba: ["¡Arriba!", "¡Sube, sube!"],
   abajo: ["¡Abajo!", "¡Baja!"],
-  inicio: ["¡Vamos, {n}!", "¡Viva el novio!", "¡Sopla, {n}!"], // {n}: el personaje elegido
+  inicio: ["¡Vamos, {n}!", "¡Asquerosa!", "¡Sopla, {n}!"], // {n}: el personaje elegido
   muerte: ["¡{n}, no!", "¡Otra ronda!", "¡Pobre pompa!"],
 };
 const BLA = ["BLA BLA BLA", "HE DEJADO DE FUMAR", "Y ESCUCHA...", "PUES NADA", "QUE TE DIGO", "OTRA COSA", "¿ME SIGUES?"];
@@ -124,17 +125,6 @@ export function mountChicle({ canvas: cv, stage }: { canvas: HTMLCanvasElement; 
   // ---------------------------------------------------------------- sprites
   const IMG = Object.fromEntries(Object.entries(SPR).map(([k, d]) => [k, paint(d)])) as Record<keyof typeof SPR, HTMLCanvasElement>;
   const GON_FACE = paint({ rows: SPR.gon.rows.slice(0, 20), pal: SPR.gon.pal });
-  // Sin el brazo izquierdo: Javi y Arro lo levantan aparte.
-  const armless = (c: HTMLCanvasElement) => {
-    const out = layer(() => {}, c.width, c.height);
-    const g = out.getContext("2d")!;
-    g.drawImage(c, 0, 0);
-    g.clearRect(0, 21, 4, 7);
-    g.fillStyle = "#2a1812";
-    g.fillRect(3, 21, 1, 6);
-    return out;
-  };
-  const JAVI_ARMLESS = armless(IMG.javi), ARRO_ARMLESS = armless(IMG.arro);
   const GUM = (() => {
     const ic = ICON_SVG.chicle;
     const c = layer(() => {}, ic.w, ic.h);
@@ -235,9 +225,9 @@ export function mountChicle({ canvas: cv, stage }: { canvas: HTMLCanvasElement; 
     return { k, a, x0, y0, x1: x0 + Math.cos(a) * JAVI.len, y1: y0 + Math.sin(a) * JAVI.len };
   }
   function sanlle(e: En) { // el gorila salta de suelo a techo; en el suelo, con los nudillos apoyados
-    const j = Math.abs(Math.sin(e.t * 2 + e.ph));
+    const j = Math.abs(Math.sin(e.t * 1.6 + e.ph));
     const img = j < 0.15 ? IMG.sanlle_kick : IMG.sanlle;
-    const feet = PH - FLOOR + 1 - j * (PH - FLOOR - CEIL - img.height - 16) * 0.75;
+    const feet = PH - FLOOR + 1 - j * (PH - FLOOR - CEIL - img.height - 16) * 0.6;
     return { x: e.x, img, top: feet - img.height };
   }
 
@@ -398,12 +388,13 @@ export function mountChicle({ canvas: cv, stage }: { canvas: HTMLCanvasElement; 
     st.high = Math.max(0, st.high - dtReal);
     st.slow = Math.max(0, st.slow - dtReal);
     st.shake = Math.max(0, st.shake - dtReal);
-    const dt = dtReal * (st.high > 0 ? HIGH.k : 1) * (st.slow > 0 ? SLOW.k : 1);
+    const dt = dtReal;
+    const pace = (st.high > 0 ? HIGH.k : 1) * (st.slow > 0 ? SLOW.k : 1);
     st.t += dt;
     for (const p of st.pops) p.age += dtReal;
     st.pops = st.pops.filter((p) => p.age < 0.9);
     if (st.gon && (st.gon.t += dtReal) > 3.2) st.gon = null;
-    const v = st.mode === "dying" || st.mode === "over" ? 0 : speed(st.score);
+    const v = st.mode === "dying" || st.mode === "over" ? 0 : speed(st.score) * pace;
     st.dist += v * dt;
     st.br += (BUB.rest - st.br) * Math.min(1, dt * 2.2);
     st.kick = Math.max(0, st.kick - dt);
@@ -546,9 +537,9 @@ export function mountChicle({ canvas: cv, stage }: { canvas: HTMLCanvasElement; 
       if (f.id === "javi") {
         const a = javiArm(o);
         if (a.k < 0.02) ctx.drawImage(IMG.javi, x + 4, o.bot);
-        else { ctx.drawImage(JAVI_ARMLESS, x + 4, o.bot); limb(IMG.brazo, a.x0 - o.x + x, a.y0, a.a); }
+        else { ctx.drawImage(IMG.javi_sinbrazo, x + 4, o.bot); limb(IMG.brazo, a.x0 - o.x + x, a.y0, a.a); }
       } else if (f.id === "arro") {
-        ctx.drawImage(f.punch > 0 ? ARRO_ARMLESS : IMG.arro, x + 4, o.bot);
+        ctx.drawImage(f.punch > 0 ? IMG.arro_sinbrazo : IMG.arro, x + 4, o.bot);
         if (f.punch > 0) limb(IMG.puno, x + 7, o.bot + 21, (215 * Math.PI) / 180);
       } else if (f.id === "hugo") ctx.drawImage(IMG.hugo, x + 4, o.bot);
       else if (f.id === "marcos") {

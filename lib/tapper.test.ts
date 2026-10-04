@@ -8,11 +8,17 @@ test("tapReward: puntos, propinas de Hugo y bonus de récord", () => {
   assert.equal(tapReward({ score: 1000, served: 12, tips: 2, wave: 3 }, true), 75);
 });
 
-test("ronda: cada vez más clientes, más seguidos y con más prisa, con tope", () => {
-  assert.deepEqual(ronda(1), { clientes: 5, cada: 2.38, prisa: 1 });
-  assert.ok(ronda(5).clientes > ronda(4).clientes);
-  assert.equal(ronda(20).cada, 0.8);
-  assert.equal(ronda(20).prisa, 2);
+test("ronda: todo sube un poco cada ronda, en línea recta y con tope", () => {
+  assert.deepEqual(ronda(1), { clientes: 5, cada: 1 / 0.55, pares: 0, prisa: 1 });
+  const porSegundo = (r: ReturnType<typeof ronda>) => (1 + r.pares) / r.cada;
+  for (let n = 1; n < 25; n++) {
+    const a = ronda(n), b = ronda(n + 1);
+    assert.ok(b.clientes > a.clientes && b.pares >= a.pares && b.prisa >= a.prisa && porSegundo(b) >= porSegundo(a) - 1e-9);
+    assert.ok(porSegundo(b) - porSegundo(a) <= 0.12 + 1e-9, `sin saltos: ronda ${n + 1}`);
+  }
+  assert.equal(ronda(30).prisa, 1.8);
+  assert.equal(ronda(30).pares, 0.5);
+  assert.ok(Math.abs(porSegundo(ronda(30)) - 2.2) < 1e-9);
 });
 
 test("barAt: la barra según la altura del toque, sin salirse", () => {
