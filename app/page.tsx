@@ -82,6 +82,8 @@ export default async function Page() {
           <p className="bio">
             {profile.bio ?? site.bio}
             {"\n\n"}🕶️🍺 Mi juego 👉 <Link href="/juego">{site.website}/juego</Link>
+            {"\n"}🫧 Flappy Chicle 👉 <Link href="/chicle">{site.website}/chicle</Link>
+            {"\n"}🍺 Tapper 👉 <Link href="/tapper">{site.website}/tapper</Link>
           </p>
           <div className="meta">
             <span><Icon name="pin" width="16" height="16" /> {site.location}</span>

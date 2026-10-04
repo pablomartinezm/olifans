@@ -14,7 +14,7 @@ type Screen = "menu" | "shop" | "play" | "over";
 type Over = Result & { coins: number; nuevo: boolean };
 
 // Icono pixel art como SVG: nítido a cualquier tamaño.
-function Px({ name, size = 16 }: { name: IconName; size?: number }) {
+export function Px({ name, size = 16 }: { name: IconName; size?: number }) {
   const ic = ICON_SVG[name];
   return (
     <svg className="px-icon" width={Math.round((size * ic.w) / ic.h)} height={size} viewBox={`0 0 ${ic.w} ${ic.h}`} shapeRendering="crispEdges" aria-hidden="true">
@@ -22,7 +22,7 @@ function Px({ name, size = 16 }: { name: IconName; size?: number }) {
     </svg>
   );
 }
-const Chicles = ({ v, size = 14 }: { v: number; size?: number }) => (
+export const Chicles = ({ v, size = 14 }: { v: number; size?: number }) => (
   <span className="px-chicles" aria-label={n(v, "chicle", "chicles")}><Px name="chicle" size={size} />{v}</span>
 );
 

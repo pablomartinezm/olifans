@@ -292,3 +292,15 @@ img, video { display: block; max-width: 100%; }
   .main.main-game { padding-bottom: 0; }
   .game-frame { max-width: none; min-height: 0; max-height: none; margin: 0; height: calc(100dvh - var(--game-top) - 54px - env(safe-area-inset-bottom)); }
 }
+
+/* Flappy Chicle (/chicle): mismo marco y botones que las gafas */
+.flappy-menu { padding-top: 40px; }
+.flappy-actions { display: flex; flex-direction: column; align-items: center; gap: 14px; }
+.flappy-actions .game-stats { padding: 8px 12px; background: rgba(6, 18, 26, 0.78); border: 3px solid var(--g-ink); }
+.flappy-actions .px-link { font-size: 14px; padding: 4px 10px; background: rgba(6, 18, 26, 0.78); }
+.game-over .px-panel .px-link { font-size: 14px; }
+.pj-pick { display: grid; grid-template-columns: repeat(5, 44px); gap: 6px; padding: 8px; background: rgba(6, 18, 26, 0.78); border: 3px solid var(--g-ink); }
+.pj-pick button { width: 44px; height: 44px; padding: 3px; border: 2px solid transparent; background: var(--g-panel); cursor: pointer; }
+.pj-pick button.on { border-color: var(--g-amber); background: #1f3a30; }
+.pj-pick svg { display: block; width: 100%; height: 100%; }
+.pj-name { margin-top: -6px; padding: 3px 10px; font: 700 14px/1 var(--font-pixel); text-transform: uppercase; color: var(--g-amber); background: rgba(6, 18, 26, 0.78); }
