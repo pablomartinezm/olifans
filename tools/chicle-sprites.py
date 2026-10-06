@@ -2,7 +2,7 @@
 #   python3 tools/chicle-sprites.py            → reescribe el bloque SPR
 #   python3 tools/chicle-sprites.py preview.png → además, hoja de vista previa (necesita Pillow)
 # Cada cara se pinta por capas sobre una cabeza común de 16 de ancho y el contorno sale solo.
-# Para añadir a alguien (Marc, Sergio...): una función como las de abajo + su entrada en SPRITES y ORDER.
+# Para añadir a alguien (falta Marc): una función como las de abajo + su entrada en SPRITES y ORDER.
 import sys
 class G:
     def __init__(s, w, h): s.w, s.h = w, h; s.g = [['.'] * w for _ in range(h)]
@@ -225,6 +225,36 @@ def sanlle():
     g.rect(9, 11, 10, 11, 'w')
     return S(g, h="#16100c", H="#3a2c22", f="#5a4636", s="#d89a70", d="#b87b54", l="#e8b48c", b="#5a4030", B="#1a120d")
 
+def sergio(kick=False, ko_=False):
+    g = head()
+    g.spans(1, [(6, 13), (4, 15), (3, 16)], 'h')                                  # engominado hacia atrás
+    g.rect(2, 4, 3, 4, 'h'); g.rect(7, 4, 12, 4, 'h'); g.rect(16, 4, 17, 4, 'h')  # con entradas
+    g.symrect(2, 5, 2, 8, 'h'); g.rect(9, 0, 10, 0, 'h')                          # arriba asoma la coleta
+    g.stamp(7, 2, ["HH  HH"]); g.stamp(6, 3, ["H      H"])                        # brillo de la gomina
+    brows(g, 'B', 6)
+    eyes(g, 'open')
+    nose(g)
+    # barba corta y entrecana: patillas finas, carrillos oscuros, bigote gris y barbilla canosa
+    g.symrect(2, 9, 2, 11, 'b')
+    g.spans(12, [(2, 5), (3, 7), (3, 16), (4, 15), (5, 14), (7, 12)], 'b')
+    g.rect(14, 12, 17, 12, 'b'); g.rect(12, 13, 16, 13, 'b')
+    for x, y in ((4, 14), (6, 15), (13, 15), (15, 14), (5, 13)): g.put(x, y, 'M')  # canas sueltas
+    g.rect(7, 11, 12, 11, 'M')                                                    # bigote
+    g.stamp(6, 12, ["mttttttm", "  dddd  "])                                      # sonrisa
+    g.spans(14, [(8, 11), (7, 12), (8, 11)], 'G')
+    body(g, kick=kick, t=TALLA["medio"][0], l=TALLA["medio"][1])
+    # camiseta de tirantes del Baskonia, blanca con rayas rojas y azules, sobre una camiseta azul marino
+    g.rect(3, 20, 4, 20, 'C'); g.rect(15, 20, 16, 20, 'C'); g.rect(7, 20, 12, 20, 'N'); g.rect(8, 21, 11, 21, 'N'); g.rect(9, 22, 10, 22, 'N')
+    g.symrect(2, 24, 4, 25, 's'); g.symrect(4, 24, 4, 25, 'd')                     # manga corta
+    g.put(6, 22, 'R'); g.put(13, 22, 'O')                                           # escudo y logo de la Euroliga
+    g.stamp(5, 23, ["RR    NN  ", "  RR    NN", "N   RR    ", " NN   RR  ", "   NN   RR"])
+    if ko_: ko(g)
+    g.stamp(12, 11, ["  yyyy ", " yYYYYy", "jJjjJjj", " qqqqqq"])               # el bocata, siempre en la boca
+    for x, y in ((2, 16), (3, 16), (2, 17), (3, 17), (4, 17), (3, 18), (4, 18), (5, 18), (3, 19), (4, 19), (5, 19), (2, 20)):
+        if g.get(x, y) == '.': g.put(x, y, 'h')                                     # la coleta le cae por detrás hasta el hombro
+    return S(g, h="#33241b", H="#5e4a3c", B="#1f1611", b="#4f4037", M="#76685f", G="#bdb5ac",
+             c="#f4f2ee", C="#1f2b4d", N="#1f2b4d", R="#c8202e", O="#f07820", y="#e2a654", Y="#f6d48c", j="#d0505a", J="#7cbc5a", q="#b9782e")
+
 def uli_body(g, y=20, kick=False):  # talla media: camisa, bermudas, piernas, calcetines y zapatillas
     g.spans(y, [(3, 16), (2, 17), (2, 17), (2, 17), (2, 17), (3, 16)], 'c')
     g.rect(6, y, 13, y, 'b')                                       # la barba cae sobre el cuello
@@ -414,8 +444,8 @@ def nota():
     g.rect(1, 6, 1, 6, '.'); g.rect(4, 9, 4, 9, '.')
     return S(g, w="#f6ead2", o="#2a1812")
 
-PJS = ["uli", "gon", "marcos", "hugo", "arro", "javi", "moreno", "sanlle", "ricky"]
-MAKERS = {"uli": uli, "gon": gon, "marcos": marcos, "hugo": hugo, "arro": arro, "javi": javi, "moreno": moreno, "ricky": ricky}
+PJS = ["uli", "gon", "marcos", "hugo", "arro", "javi", "moreno", "sanlle", "ricky", "sergio"]
+MAKERS = {"uli": uli, "gon": gon, "marcos": marcos, "hugo": hugo, "arro": arro, "javi": javi, "moreno": moreno, "ricky": ricky, "sergio": sergio}
 SPRITES = {}
 for pj in PJS:
     if pj == "sanlle":

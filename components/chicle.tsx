@@ -23,7 +23,7 @@ export function Face({ id }: { id: Pj }) {
   );
 }
 
-// Selector de personaje: las nueve caras y el nombre del elegido. Lo usan Flappy Chicle y el Tapper.
+// Selector de personaje: una cara por colega y el nombre del elegido. Lo usan Flappy Chicle y el Tapper.
 export function Picker({ pj, onPick, label = "Personaje" }: { pj: Pj; onPick: (id: Pj) => void; label?: string }) {
   return (
     <>

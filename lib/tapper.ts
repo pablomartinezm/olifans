@@ -48,6 +48,7 @@ const MANIAS: Record<Pj, { prisa: number; empuje: number }> = {
   moreno: { prisa: 1.1, empuje: 1 },    // su novia tira de la correa de vez en cuando (solo de broma: no le mueve)
   sanlle: { prisa: 1.5, empuje: 0.7 },  // el gorila va a toda leche
   ricky: { prisa: 1, empuje: 1.2 },     // no se le ve detrás de la barra
+  sergio: { prisa: 0.85, empuje: 1 },   // pide de comer: va despacio porque no suelta el bocata
 };
 const GON = {
   ronda: ["¡Ronda {r}!", "¡Ronda {r}, que no pare!", "¡Ronda {r}! ¡Asquerosa!"],
@@ -56,6 +57,7 @@ const GON = {
   fin: ["¡Cerramos!", "¡{n}, a la calle!", "¡Mañana más!"],
 };
 const BLA = ["BLA BLA BLA", "HE DEJADO DE FUMAR", "Y ESCUCHA...", "PUES NADA", "OTRA COSA", "¿ME SIGUES?"];
+const HAMBRE = ["¡UN BOCATA!", "¿HAY PINTXOS?", "¿Y DE COMER?", "¡CAÑA Y BOCATA!"];
 
 type Opts = { font: string; textFont: string; onOver: (r: TapRun) => void };
 type Cust = {
@@ -255,6 +257,7 @@ export function mountTapper({ canvas: cv, stage }: { canvas: HTMLCanvasElement; 
     const id = nextWho();
     const c: Cust = { id, bar, x: DOOR + 2, st: "walk", t: Math.random(), to: 0, tug: 3 + Math.random() * 3, jerk: 0, say: null, sayT: 0, n: st.n++, bebidas: 0 };
     if (id === "gon") { c.say = gonSays("pide"); c.sayT = 2.2; }
+    if (id === "sergio") { c.say = HAMBRE[Math.floor(Math.random() * HAMBRE.length)]; c.sayT = 2.2; }
     st.custs.push(c);
   }
   const speedOf = (c: Cust) => WALK * ronda(st.wave).prisa * MANIAS[c.id].prisa;
@@ -387,6 +390,7 @@ export function mountTapper({ canvas: cv, stage }: { canvas: HTMLCanvasElement; 
           st.mugs.push({ bar: c.bar, x: c.x + 8, full: false });
           sfx.slide();
           if (c.id === "gon") { c.say = gonSays("pide"); c.sayT = 2; }
+          if (c.id === "sergio") { c.say = HAMBRE[Math.floor(Math.random() * HAMBRE.length)]; c.sayT = 2; }
         }
       } else c.x -= 40 * dt; // se va por la puerta
     }
@@ -559,7 +563,7 @@ export function mountTapper({ canvas: cv, stage }: { canvas: HTMLCanvasElement; 
     for (let b = 0; b < BARS; b++) drawBar(b);
     for (const m of st.smoke) px(Math.round(m.x), Math.round(m.y), 2, 2, `rgba(220,220,220,${(0.7 * (1 - m.t / m.life)).toFixed(2)})`);
     for (const n of st.notes) if (n.t > 0) ctx.drawImage(IMG.nota, Math.round(n.x), Math.round(n.y));
-    // bocadillos: lo que pide Gon (en cirílico) y la chapa de Arro
+    // bocadillos: lo que pide Gon (en cirílico), la chapa de Arro y el hambre de Sergio
     for (const c of st.custs) {
       if (!c.say || c.sayT <= 0 || c.st === "out") continue;
       const y = topOf(c.id, counterY(c.bar)) - 2;

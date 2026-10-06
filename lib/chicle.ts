@@ -5,8 +5,8 @@ import { ICON_SVG, layer } from "./uli-art.ts";
 import { CEIL, FLOOR, PJS, SPR, WALL_W, paint, paintRolls, paintWall, type Pj, type SprName } from "./chicle-art.ts";
 
 export type Run = { score: number; gums: number; bills: number };
-export type Friend = "javi" | "arro" | "hugo" | "marcos" | "moreno" | "sanlle" | "ricky";
-const STANDS: Friend[] = ["javi", "arro", "hugo", "marcos"]; // de pie sobre los rollos
+export type Friend = "javi" | "arro" | "hugo" | "marcos" | "moreno" | "sanlle" | "ricky" | "sergio";
+const STANDS: Friend[] = ["javi", "arro", "hugo", "marcos", "sergio"]; // de pie sobre los rollos
 const FREES: Friend[] = ["sanlle", "ricky"];                  // en el hueco entre columnas; Moreno cuelga en lugar de los rollos de arriba
 
 // ---------------------------------------------------------------- piezas puras (con test)
@@ -100,6 +100,7 @@ const GON: Record<Friend | "arriba" | "abajo" | "inicio" | "muerte", string[]> =
   moreno: ["¡Cuidado, que Moreno muerde!", "¡Moreno cuelga del techo!"],
   sanlle: ["¡El gorila va hasta arriba!", "¡Sanlle invita a una!"],
   ricky: ["¡Rebota en la calva de Ricky!", "¡Ricky está abajo!"],
+  sergio: ["¡Quítale el chicle a Sergio!", "¡Sergio se lo come todo!"],
   arriba: ["¡Arriba!", "¡Sube, sube!"],
   abajo: ["¡Abajo!", "¡Baja!"],
   inicio: ["¡Vamos, {n}!", "¡Asquerosa!", "¡Sopla, {n}!"], // {n}: el personaje elegido
@@ -157,6 +158,7 @@ export function mountChicle({ canvas: cv, stage }: { canvas: HTMLCanvasElement; 
     harp() { [523, 659, 784, 1047, 1319].forEach((f, i) => tone(f, f * 1.003, 0.6, "sine", 0.05, i * 0.08)); },
     gon() { [0, 0.07, 0.14].forEach((d) => { const f = 260 + Math.random() * 420; tone(f, f * 1.4, 0.05, "square", 0.018, d); }); },
     arm() { tone(220, 760, 0.1, "triangle", 0.03); },
+    nam() { [0, 0.13].forEach((d) => { noise(0.06, 0.25); tone(190, 110, 0.08, "square", 0.05, d); }); },
   };
 
   // ---------------------------------------------------------------- estado
@@ -204,7 +206,7 @@ export function mountChicle({ canvas: cv, stage }: { canvas: HTMLCanvasElement; 
     const prev = last ? (last.top + last.bot) / 2 : PH * 0.45;
     const cy = Math.min(hi, Math.max(lo, prev + (Math.random() * 2 - 1) * STEP));
     st.obs.push({
-      x, n, top: Math.round(cy - gh / 2), bot: Math.round(cy + gh / 2), passed: false, gum: Math.random() < 0.5 ? 1 : 0,
+      x, n, top: Math.round(cy - gh / 2), bot: Math.round(cy + gh / 2), passed: false, gum: id === "sergio" || Math.random() < 0.5 ? 1 : 0,
       f: id && pos ? { id, pos, h: fh, t: 0, ph: Math.random() * 2.4, done: false, thrown: 0, wait: 0, punch: 0 } : null,
     });
     if (id && !pos) st.ents.push({ id, x: x + OW + (SPACING - OW) / 2, t: 0, ph: Math.random() * 6, done: false, squash: 0 });
@@ -223,6 +225,13 @@ export function mountChicle({ canvas: cv, stage }: { canvas: HTMLCanvasElement; 
     const a = JAVI.a0 + (JAVI.a1 - JAVI.a0) * k;
     const x0 = o.x + 4 + 3, y0 = o.bot + 21;
     return { k, a, x0, y0, x1: x0 + Math.cos(a) * JAVI.len, y1: y0 + Math.sin(a) * JAVI.len };
+  }
+  // Sergio se va llevando a la boca el chicle de su hueco según se acerca la columna: o bajas a quitárselo, o se lo come.
+  const MOUTH = 12; // la boca de Sergio, desde lo alto de su cabeza
+  const slurp = (o: Ob) => (o.f?.id === "sergio" ? Math.min(1, Math.max(0, (100 - (o.x + OW / 2 - PX0)) / 112)) ** 3 : 0);
+  function gumY(o: Ob) {
+    const mid = (o.top + o.bot) / 2 + Math.sin(st.t * 4 + o.n) * 1.5;
+    return mid + (o.bot + MOUTH - mid) * slurp(o);
   }
   function sanlle(e: En) { // el gorila salta de suelo a techo; en el suelo, con los nudillos apoyados
     const j = Math.abs(Math.sin(e.t * 1.6 + e.ph));
@@ -288,7 +297,7 @@ export function mountChicle({ canvas: cv, stage }: { canvas: HTMLCanvasElement; 
         pop("¡PUM!", PX0 + 10, st.y - 14, "#e4574a");
         sfx.punch();
       }
-      if (o.gum === 1 && Math.hypot(o.x + OW / 2 - mx, (o.top + o.bot) / 2 - my) < 16) {
+      if (o.gum === 1 && Math.hypot(o.x + OW / 2 - mx, gumY(o) - my) < 16) {
         o.gum = 2; st.gums++;
         pop("+1", PX0 + 4, st.y - 16, "#ff9fd0");
         sfx.gum();
@@ -359,6 +368,14 @@ export function mountChicle({ canvas: cv, stage }: { canvas: HTMLCanvasElement; 
       if (f.id === "arro" && o.x < VW && (f.wait -= dt) <= 0) {
         f.wait = 0.22;
         st.smoke.push({ x: o.x + 4 + 18, y: o.bot + 12, vx: -4 + Math.random() * 8, vy: -14 - Math.random() * 8, t: 0, life: 1.4, c: "" });
+      }
+      if (f.id === "sergio") {
+        f.wait = Math.max(0, f.wait - dt); // masticando
+        if (o.gum === 1 && slurp(o) >= 1) {
+          o.gum = 2; f.wait = 0.7;
+          pop("¡ÑAM!", o.x + OW / 2, o.bot - 10, "#f2b35e");
+          sfx.nam();
+        }
       }
       if (f.id === "javi") {
         const up = javiK(f.t + f.ph) > 0.5;
@@ -542,6 +559,7 @@ export function mountChicle({ canvas: cv, stage }: { canvas: HTMLCanvasElement; 
         ctx.drawImage(f.punch > 0 ? IMG.arro_sinbrazo : IMG.arro, x + 4, o.bot);
         if (f.punch > 0) limb(IMG.puno, x + 7, o.bot + 21, (215 * Math.PI) / 180);
       } else if (f.id === "hugo") ctx.drawImage(IMG.hugo, x + 4, o.bot);
+      else if (f.id === "sergio") ctx.drawImage(IMG.sergio, x + 4, o.bot + (f.wait > 0 && Math.floor(st.t * 12) % 2 ? 1 : 0));
       else if (f.id === "marcos") {
         ctx.drawImage(IMG.marcos, x - 1, o.bot);
         ctx.drawImage(IMG.arpa, x + 15, o.bot + f.h - IMG.arpa.height);
@@ -558,7 +576,7 @@ export function mountChicle({ canvas: cv, stage }: { canvas: HTMLCanvasElement; 
       ctx.drawImage(s.img, Math.round(s.x - s.img.width / 2), Math.round(s.top));
     }
     for (const m of st.smoke) px(Math.round(m.x), Math.round(m.y), 2, 2, `rgba(220,220,220,${(0.7 * (1 - m.t / m.life)).toFixed(2)})`);
-    for (const o of st.obs) if (o.gum === 1) ctx.drawImage(GUM, Math.round(o.x + OW / 2 - 6), Math.round((o.top + o.bot) / 2 - 6 + Math.sin(st.t * 4 + o.n) * 1.5));
+    for (const o of st.obs) if (o.gum === 1) ctx.drawImage(GUM, Math.round(o.x + OW / 2 - 6), Math.round(gumY(o) - 6));
     for (const b of st.cash) {
       const w = Math.max(1, Math.round(Math.abs(Math.cos(b.t * 6)) * IMG.billete.width)); // gira al caer
       ctx.drawImage(IMG.billete, Math.round(b.x - w / 2), Math.round(b.y - 4), w, IMG.billete.height);
